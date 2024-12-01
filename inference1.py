@@ -103,7 +103,6 @@ def normalize_test(poses_array):
     face_features_array = [normalized_array]
     return face_features_array
 
-
 def head_pose(face_features):
     
     pitch_pred, yaw_pred, roll_pred = 0, 0, 0
@@ -208,14 +207,15 @@ def run_face_mp(image, height, width, draw_face = True):
                     if running:
                         running_inference = True
                         alert = False
-
-        # Giảm rung lắc nếu chuyển động nhỏ
-        threshold = 10  # Ngưỡng (số pixel)
-        if abs(delta_x) > threshold or abs(delta_y) > threshold:
-            # Gửi lệnh đến Arduino
-            data = f"{int(alert)},{int(current_servo_x)},{int(current_servo_y)}\n"
-            arduino.write(data.encode('utf-8'))
-
+        try:
+            # Giảm rung lắc nếu chuyển động nhỏ
+            threshold = 10  # Ngưỡng (số pixel)
+            if abs(delta_x) > threshold or abs(delta_y) > threshold:
+                # Gửi lệnh đến Arduino
+                data = f"{int(alert)},{int(current_servo_x)},{int(current_servo_y)}\n"
+                arduino.write(data.encode('utf-8'))
+        except:
+            pass
         ear = eye_feature(landmarks_positions)
         mar = mouth_feature(landmarks_positions)
         puc = pupil_feature(landmarks_positions)
@@ -470,11 +470,11 @@ if __name__ == "__main__":
     mouth = [[61, 291], [39, 181], [0, 17], [269, 405]] # mouth landmark coordinates
     states = ['normal', 'drowsy']
 
+    arduino = None
     running = True  
     running_inference = True
     alert = False
-    stop_thread = False
-
+ 
     servo_delta_x = 0
     servo_delta_y = 0
     current_servo_x = 90
