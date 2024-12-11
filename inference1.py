@@ -103,6 +103,7 @@ def normalize_test(poses_array):
     face_features_array = [normalized_array]
     return face_features_array
 
+
 def head_pose(face_features):
     
     pitch_pred, yaw_pred, roll_pred = 0, 0, 0
@@ -134,7 +135,7 @@ def draw_axes(img, pitch, yaw, roll, tx, ty, size=50):
     return new_img
 
 def run_face_mp(image, height, width, draw_face = True):
-    global alert, running, running_inference, arduino, servo_delta_x, servo_delta_y, current_servo_x, current_servo_y
+    global alert, running, running_inference, arduino, servo_delta_x, servo_delta_y, current_servo_x, current_servo_y, detect
     NOSE = 1
     FOREHEAD = 10
     LEFT_EYE = 33
@@ -185,7 +186,7 @@ def run_face_mp(image, height, width, draw_face = True):
         delta_y = Nose_y - center_y
 
         # Chuyển đổi khoảng lệch thành độ servo
-
+        
         if arduino.in_waiting > 0:
             data = arduino.readline().decode('utf-8').strip()  # Đọc và giải mã dòng dữ liệu
             if data.count(",") == 1:
@@ -207,31 +208,31 @@ def run_face_mp(image, height, width, draw_face = True):
                     if running:
                         running_inference = True
                         alert = False
-        try:
-            # Giảm rung lắc nếu chuyển động nhỏ
-            threshold = 10  # Ngưỡng (số pixel)
-            if abs(delta_x) > threshold or abs(delta_y) > threshold:
-                # Gửi lệnh đến Arduino
-                data = f"{int(alert)},{int(current_servo_x)},{int(current_servo_y)}\n"
-                arduino.write(data.encode('utf-8'))
-        except:
-            pass
+
+        # Giảm rung lắc nếu chuyển động nhỏ
+        threshold = 10  # Ngưỡng (số pixel)
+        if abs(delta_x) > threshold or abs(delta_y) > threshold:
+            # Gửi lệnh đến Arduino
+            data = f"{int(alert)},{int(current_servo_x)},{int(current_servo_y)}\n"
+            arduino.write(data.encode('utf-8'))
+
         ear = eye_feature(landmarks_positions)
         mar = mouth_feature(landmarks_positions)
         puc = pupil_feature(landmarks_positions)
         moe = mar/ear
-
+        detect = True
     else:
         ear = -1000
         mar = -1000
         puc = -1000
         moe = -1000
         pitch_pred, yaw_pred, roll_pred = 0, 0, 0
+        detect = False
    
     return ear, mar, puc, moe, pitch_pred, yaw_pred, roll_pred, image
 
 
-def calibrate(calib_frame_count=200):
+def calibrate(calib_frame_count=150, frames_start = 60):
 
     ears = []
     mars = []
@@ -245,15 +246,16 @@ def calibrate(calib_frame_count=200):
     width, height = 1280, 720
     cap.set(3, width)
     cap.set(4, height)
+    frames = 0
     
     while True:
         success, image = cap.read()
         if not success:
             print("Ignoring empty camera frame.")
             continue
-
+        frames +=1
         ear, mar, puc, moe, pitch_pred, yaw_pred, roll_pred, image = run_face_mp(image, height=height, width=width)
-        if ear != -1000:
+        if ear != -1000 and frames > frames_start:
             ears.append(ear)
             mars.append(mar)
             pucs.append(puc)
@@ -267,7 +269,7 @@ def calibrate(calib_frame_count=200):
         cv2.imshow('MediaPipe FaceMesh', image)
         if cv2.waitKey(5) & 0xFF == ord("q"):
             break
-        if len(ears) >= calib_frame_count:
+        if frames >= frames_start + calib_frame_count:
             break
     
     cv2.destroyAllWindows()
@@ -310,7 +312,7 @@ def get_classification(input_data):
         preds = (preds > 0.5).int().cpu().numpy()
     return int(preds.sum() >= 5)
 
-def infer(ears_norm, mars_norm, pucs_norm, moes_norm, pitch_pred_norm, yaw_pred_norm, roll_pred_norm, count_detect_drownsiness = 10):
+def infer(ears_norm, mars_norm, pucs_norm, moes_norm, pitch_pred_norm, yaw_pred_norm, roll_pred_norm, count_detect_drownsiness = 6):
     ''' Perform inference.
     :param ears_norm: Normalization values for eye feature
     :param mars_norm: Normalization values for mouth feature
@@ -318,7 +320,7 @@ def infer(ears_norm, mars_norm, pucs_norm, moes_norm, pitch_pred_norm, yaw_pred_
     :param moes_norm: Normalization values for mouth over eye feature. 
     :param 
     '''
-    global running, running_inference, alert
+    global running, running_inference, alert, detect
 
     ear_main = 0
     mar_main = 0
@@ -378,14 +380,19 @@ def infer(ears_norm, mars_norm, pucs_norm, moes_norm, pitch_pred_norm, yaw_pred_
                 pitch_main = pitch_main
                 # yaw_main = 0
                 # roll_main = 0
-
-            if pitch_main > 0.3 or pitch_main < - 0.2:
-                head = 1
-                head_count += 1
+            if detect:
+                if pitch_main > 0.25 or pitch_main < - 0.2:
+                    head = 1
+                    head_count += 1
+                else:
+                    head = 0
+                    head_count = 0
             else:
-                head = 0
-                head_count = 0
-            
+                if pitch_main > 0.2 or pitch_main < -0.15:
+                    head_count += 1
+                else:
+                    head_count == 0
+
             if len(input_data) == 20:
                 input_data.pop(0)
             input_data.append([ear_main, mar_main, puc_main, moe_main])
@@ -426,10 +433,10 @@ def infer(ears_norm, mars_norm, pucs_norm, moes_norm, pitch_pred_norm, yaw_pred_
                     color = (0, 255, 0)
                 else:
                     color = (0, 0, 255)
-                cv2.putText(image, "%s" %(states[label]), (int(0.02*image.shape[1]), int(0.2*image.shape[0])),
+                cv2.putText(image, "%s" %(states[label]), (int(0.02*image.shape[1]), int(0.15*image.shape[0])),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
             
-            if count_decision >= count_detect_drownsiness or (head == 1 and head_count >=30): # Turn Alert
+            if count_decision >= count_detect_drownsiness or (head == 1 and head_count >=20): # Turn Alert
                 alert = True
                 print("CẢNH BÁO CẢNH BÁO, người dùng đang buồn ngủ")
             else:
@@ -455,7 +462,7 @@ def read_arduino_data():
 
     while True:
         try:
-            arduino = serial.Serial(port='COM5', baudrate=9600, timeout=1)
+            arduino = serial.Serial(port='COM9', baudrate=19200, timeout=1)
             break
         except serial.SerialException:
             print("Lỗi kết nối với Arduino. Đang thử lại...")
@@ -470,11 +477,11 @@ if __name__ == "__main__":
     mouth = [[61, 291], [39, 181], [0, 17], [269, 405]] # mouth landmark coordinates
     states = ['normal', 'drowsy']
 
-    arduino = None
     running = True  
     running_inference = True
     alert = False
- 
+    stop_thread = False
+
     servo_delta_x = 0
     servo_delta_y = 0
     current_servo_x = 90
