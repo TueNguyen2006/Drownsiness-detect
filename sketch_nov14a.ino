@@ -8,7 +8,6 @@ String data1;
 
 int servoPinX = 9; // Pin for X servo
 int servoPinY = 10; // Pin for Y servo
-const int stepSize = 2; // Tốc độ tối đa mỗi bước (độ)
 
 const int buttonPin1 = 2;     // Chân kết nối nút biến running
 const int buttonPin2 = 3;     // Chân kết nối nút biến running_inference
@@ -22,10 +21,10 @@ const unsigned long debounceDelay = 700;  // Thời gian debounce (200 ms)
 volatile bool button1Pressed = false; // Cờ để nhận biết nút 1 đã nhấn
 volatile bool button2Pressed = false; // Cờ để nhận biết nút 2 đã nhấn
 
-int currentAngleX = 90; // Góc hiện tại của servoX
-int currentAngleY = 90; // Góc hiện tại của servoY
-int targetAngleX = 90;  // Góc mục tiêu của servoX
-int targetAngleY = 90;  // Góc mục tiêu của servoY
+int currentAngleX = 135; // Góc hiện tại của servoX
+int currentAngleY = 135; // Góc hiện tại của servoY
+int targetAngleX = 135;  // Góc mục tiêu của servoX
+int targetAngleY = 135;  // Góc mục tiêu của servoY
 
 void setup() {
   pinMode(buttonPin1, INPUT_PULLUP);   // Thiết lập chế độ INPUT với PULLUP cho nút 1
@@ -44,7 +43,7 @@ void setup() {
   servoX.write(currentAngleX); // Set initial position
   servoY.write(currentAngleY);
 
-  Serial.begin(9600); // Match baud rate with Python
+  Serial.begin(19200); // Match baud rate with Python
 }
 
 void loop() {
@@ -88,14 +87,13 @@ void loop() {
   servoX.write(currentAngleX);
   servoY.write(currentAngleY);
 
-
   // Kiểm tra nút tắt đèn còi
   if (digitalRead(buttonPin3) == LOW) {
     digitalWrite(outputPin, LOW);
     delay(5000);
   }
 
-  delay(30); // Thêm độ trễ để làm mượt chuyển động
+  delay(20); // Thêm độ trễ để làm mượt chuyển động
 }
 
 // Xử lý ngắt ngoài khi nhấn nút 1
